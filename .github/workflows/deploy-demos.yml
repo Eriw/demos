@@ -1,0 +1,106 @@
+name: Deploy Demos to Vercel
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'demos/**'
+
+jobs:
+  # ── Step 1: figure out which demo-* folders actually changed ──────────────
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Find changed demo folders
+        id: set-matrix
+        run: |
+          if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            # First push to the branch — deploy every demo present
+            DEMOS=$(find demos -maxdepth 1 -mindepth 1 -type d -name 'demo-*' -printf '%P\n' | sort)
+          else
+            DEMOS=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" \
+              | grep '^demos/demo-' \
+              | cut -d'/' -f2 \
+              | sort -u)
+          fi
+
+          if [ -z "$DEMOS" ]; then
+            echo "matrix={\"demo\":[]}" >> "$GITHUB_OUTPUT"
+          else
+            JSON=$(echo "$DEMOS" | jq -R . | jq -sc '{"demo": .}')
+            echo "matrix=$JSON" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ── Step 2: deploy each changed demo as its own Vercel project ────────────
+  deploy:
+    needs: detect
+    if: ${{ fromJson(needs.detect.outputs.matrix).demo[0] != null }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      # Install demo dependencies (if any) so Vercel CLI can build locally
+      - name: Install demo dependencies
+        working-directory: demos/${{ matrix.demo }}
+        run: |
+          if [ -f package.json ]; then
+            npm ci --prefer-offline || npm install
+          fi
+
+      - name: Deploy ${{ matrix.demo }} → Vercel
+        working-directory: demos/${{ matrix.demo }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          # Optional – required when deploying under a Vercel team
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+        run: |
+          PROJECT_NAME="${{ matrix.demo }}"
+
+          # Pull project settings if this project already exists on Vercel;
+          # --yes creates it automatically if it doesn't.
+          vercel pull --yes \
+            --token "$VERCEL_TOKEN" \
+            --environment=production \
+            ${VERCEL_ORG_ID:+--scope "$VERCEL_ORG_ID"} \
+            2>/dev/null || true
+
+          # Build & deploy to production.
+          # --name sets (or reuses) the Vercel project name.
+          vercel deploy \
+            --token "$VERCEL_TOKEN" \
+            --prod \
+            --yes \
+            --name "$PROJECT_NAME" \
+            ${VERCEL_ORG_ID:+--scope "$VERCEL_ORG_ID"}
+
+      - name: Print deployment URL
+        working-directory: demos/${{ matrix.demo }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+        run: |
+          URL=$(vercel ls "${{ matrix.demo }}" \
+                  --token "$VERCEL_TOKEN" \
+                  ${VERCEL_ORG_ID:+--scope "$VERCEL_ORG_ID"} \
+                  --meta gitBranch=main 2>/dev/null \
+                | grep 'https://' | head -1 | awk '{print $2}') || true
+          echo "::notice title=Deployed::${{ matrix.demo }} → ${URL:-check Vercel dashboard}"
