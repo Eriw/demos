@@ -21,7 +21,6 @@ project (named after the folder, e.g. `demo-2-recipes`).
 | Secret | Description |
 |---|---|
 | `VERCEL_TOKEN` | Vercel API token (Account Settings → Tokens) |
-| `VERCEL_ORG_ID` | *(optional)* Team/org ID — only needed for team accounts |
 
 ## Adding a new demo
 
