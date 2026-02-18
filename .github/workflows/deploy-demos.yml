@@ -70,8 +70,6 @@ jobs:
         working-directory: demos/${{ matrix.demo }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          # Optional – required when deploying under a Vercel team
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
         run: |
           PROJECT_NAME="${{ matrix.demo }}"
 
@@ -80,7 +78,6 @@ jobs:
           vercel pull --yes \
             --token "$VERCEL_TOKEN" \
             --environment=production \
-            ${VERCEL_ORG_ID:+--scope "$VERCEL_ORG_ID"} \
             2>/dev/null || true
 
           # Build & deploy to production.
@@ -89,18 +86,15 @@ jobs:
             --token "$VERCEL_TOKEN" \
             --prod \
             --yes \
-            --name "$PROJECT_NAME" \
-            ${VERCEL_ORG_ID:+--scope "$VERCEL_ORG_ID"}
+            --name "$PROJECT_NAME"
 
       - name: Print deployment URL
         working-directory: demos/${{ matrix.demo }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
         run: |
           URL=$(vercel ls "${{ matrix.demo }}" \
                   --token "$VERCEL_TOKEN" \
-                  ${VERCEL_ORG_ID:+--scope "$VERCEL_ORG_ID"} \
                   --meta gitBranch=main 2>/dev/null \
                 | grep 'https://' | head -1 | awk '{print $2}') || true
           echo "::notice title=Deployed::${{ matrix.demo }} → ${URL:-check Vercel dashboard}"
