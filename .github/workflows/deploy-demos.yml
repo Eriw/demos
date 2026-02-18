@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - 'demos/**'
+      - '.github/workflows/deploy-demos.yml'
+  workflow_dispatch:  # allow manual runs from the Actions tab
 
 jobs:
   # ── Step 1: figure out which demo-* folders actually changed ──────────────
@@ -21,8 +23,21 @@ jobs:
       - name: Find changed demo folders
         id: set-matrix
         run: |
-          if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
-            # First push to the branch — deploy every demo present
+          DEPLOY_ALL=false
+
+          # Manual trigger → redeploy everything
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            DEPLOY_ALL=true
+          # First-ever push to main
+          elif [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            DEPLOY_ALL=true
+          # Workflow file itself changed → redeploy everything
+          elif git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" \
+               | grep -q '^\.github/workflows/deploy-demos\.yml$'; then
+            DEPLOY_ALL=true
+          fi
+
+          if [ "$DEPLOY_ALL" = "true" ]; then
             DEMOS=$(find demos -maxdepth 1 -mindepth 1 -type d -name 'demo-*' -printf '%P\n' | sort)
           else
             DEMOS=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" \
