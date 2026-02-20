@@ -1,0 +1,246 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 2rem 1rem;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #f8fafc;
+}
+
+.subtitle {
+  color: #94a3b8;
+  font-size: 0.95rem;
+}
+
+/* ── Puzzle picker ─────────────────────────────────────── */
+.puzzle-picker {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+}
+
+.pick-btn {
+  padding: 0.35rem 0.9rem;
+  border-radius: 9999px;
+  border: 1.5px solid #334155;
+  background: #1e293b;
+  color: #cbd5e1;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.pick-btn:hover {
+  background: #293548;
+  border-color: #6366f1;
+  color: #e0e7ff;
+}
+
+.pick-btn.active {
+  background: #6366f1;
+  border-color: #6366f1;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ── Win banner ────────────────────────────────────────── */
+.win-banner {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 700;
+  padding: 0.6rem 2rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 20px rgba(34,197,94,0.4);
+  animation: pop 0.3s ease;
+}
+
+@keyframes pop {
+  0%   { transform: scale(0.8); opacity: 0; }
+  60%  { transform: scale(1.08); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* ── Nonogram grid ─────────────────────────────────────── */
+.game-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  user-select: none;
+}
+
+.nonogram {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Column clues row */
+.col-clues-row {
+  display: flex;
+  align-items: flex-end;
+}
+
+.row-clue-spacer {
+  /* matches the width of the row-clue area */
+  min-width: 60px;
+  flex-shrink: 0;
+}
+
+.col-clue {
+  width: 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  padding-bottom: 4px;
+  min-height: calc(var(--max-col-clue, 3) * 22px);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #94a3b8;
+  transition: color 0.2s;
+}
+
+.col-clue.error {
+  color: #f87171;
+}
+
+/* Grid rows */
+.grid-row {
+  display: flex;
+  align-items: center;
+}
+
+.row-clue {
+  min-width: 60px;
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: 4px;
+  padding-right: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #94a3b8;
+  transition: color 0.2s;
+  flex-shrink: 0;
+}
+
+.row-clue.error {
+  color: #f87171;
+}
+
+/* Individual cells */
+.cell {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #334155;
+  background: #1e293b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.08s;
+  position: relative;
+}
+
+.cell:hover {
+  background: #293548;
+}
+
+.cell.filled {
+  background: #6366f1;
+  border-color: #6366f1;
+}
+
+.cell.filled:hover {
+  background: #818cf8;
+}
+
+.cell.marked {
+  background: #1e293b;
+}
+
+.x-mark {
+  color: #64748b;
+  font-size: 0.9rem;
+  pointer-events: none;
+  line-height: 1;
+}
+
+/* Thick borders every 5 cells */
+.cell.border-right-thick {
+  border-right: 2.5px solid #64748b;
+}
+
+.cell.border-bottom-thick {
+  border-bottom: 2.5px solid #64748b;
+}
+
+/* ── Controls ──────────────────────────────────────────── */
+.controls {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.ctrl-btn {
+  padding: 0.5rem 1.5rem;
+  border-radius: 0.4rem;
+  border: none;
+  background: #6366f1;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.ctrl-btn:hover:not(:disabled) {
+  background: #4f46e5;
+  transform: translateY(-1px);
+}
+
+.ctrl-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ctrl-btn.reset {
+  background: #334155;
+}
+
+.ctrl-btn.reset:hover {
+  background: #475569;
+}
+
+/* ── Hint ──────────────────────────────────────────────── */
+.hint {
+  font-size: 0.78rem;
+  color: #475569;
+}
