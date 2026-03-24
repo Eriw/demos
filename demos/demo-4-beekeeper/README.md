@@ -1,86 +1,69 @@
 # HiveTrack – Beekeeper Management App
 
-A full-featured web application for beekeepers to manage multiple apiary
-locations, track hive health, log inspections, and collaborate with other
-beekeepers in real time.
+A full-featured web app for beekeepers to manage apiary locations, track hive
+health, log inspections, and collaborate in real time.
 
-## Features
+## Tech stack
 
-- **Google authentication** with automatic user profile creation
-- **Apiary (Garden) management** — create, edit, delete locations
-- **Hive tracking** — add hives, update health status (Healthy / Needs Attention / Swarming / Dormant)
-- **Inspection logs** — chronological timeline with manual back-dating support
-- **Date filtering** — sidebar calendar to filter inspection logs by date
-- **Collaborator system** — invite users by email to access your apiaries
-- **Global activity feed** — all inspections across all your apiaries in one view
-- **Real-time sync** — Firestore `onSnapshot` listeners update every client instantly
-- **Access control** — Firestore security rules enforce ownership and collaborator permissions
+- **Next.js 14** (App Router, client components)
+- **Supabase** — PostgreSQL + Auth (email/password) + Realtime
+- **Tailwind CSS** — custom apiary theme (honey gold + deep charcoal)
+- **date-fns** — date formatting
 
-## Tech Stack
+## One-time Supabase setup
 
-- **Next.js 14** (App Router)
-- **Firebase** — Auth (Google) + Firestore (real-time database)
-- **Tailwind CSS** with a custom apiary color theme
-- **date-fns** for date formatting
+The Vercel ↔ Supabase integration injects the env vars automatically. You just
+need to set up the database schema once:
 
-## Setup
+1. Go to your **Supabase project → SQL Editor**
+2. Paste the contents of **`supabase/schema.sql`** and click **Run**
 
-### 1. Create a Firebase project
+That's it. Tables, RLS policies, realtime, and indexes are all created in one shot.
 
-1. Go to [Firebase Console](https://console.firebase.google.com/) and create a new project.
-2. Enable **Authentication** → Sign-in method → **Google**.
-3. Enable **Firestore Database** (start in Production mode).
-4. Register a **Web App** and copy the config.
+### Optional: disable email confirmation for faster testing
 
-### 2. Configure environment variables
+Supabase requires email confirmation by default. To skip it during development:
+
+> Supabase → Authentication → Providers → Email → uncheck **"Confirm email"**
+
+## Local development
 
 ```bash
 cp .env.local.example .env.local
-```
+# Fill in NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY
+# from Supabase > Project Settings > API
 
-Fill in your Firebase credentials in `.env.local`.
-
-### 3. Deploy Firestore security rules
-
-```bash
-npm install -g firebase-tools
-firebase login
-firebase use <your-project-id>
-firebase deploy --only firestore:rules
-```
-
-### 4. Install and run
-
-```bash
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+## Features
 
-## Data Model
+- **Email/password auth** with display name, auto-creates a profile row on signup
+- **Apiary (Garden) management** — create, delete, manage per-location collaborators
+- **Hive tracking** — add hives, update health status (Healthy / Needs Attention / Swarming / Dormant)
+- **Inspection log** — timeline with manual back-dating, per-author delete
+- **Date filter sidebar** — quick-tap buttons for dates that have entries
+- **Collaborator invite** — email lookup validates the user exists before adding
+- **Global activity feed** — all inspections across all your apiaries, grouped by date
+- **Real-time sync** — Supabase `postgres_changes` subscriptions update every client instantly
+
+## Data model
 
 ```
-users/{uid}
-  uid, email, displayName, photoURL, createdAt
-
-gardens/{gardenId}
-  name, location, ownerId, ownerEmail, collaborators[], createdAt, updatedAt
-
-hives/{hiveId}
-  name, gardenId, ownerId, status, createdAt, updatedAt
-
-inspections/{inspectionId}
-  hiveId, gardenId, authorId, authorName, message, timestamp, createdAt
+profiles        id, email, display_name, created_at
+gardens         id, name, location, owner_id, owner_email, created_at, updated_at
+garden_collaborators  garden_id, user_id, email, display_name, added_at
+hives           id, name, garden_id, owner_id, status, created_at, updated_at
+inspections     id, hive_id, garden_id, author_id, author_name, message, timestamp, created_at
 ```
 
-## Color Palette
+## Security
 
-| Token | Color |
-|---|---|
-| `honey-*`    | Golden yellows (#F59E0B family) |
-| `charcoal-*` | Deep charcoals (#1C1917 family) |
-| Status: Healthy       | Emerald green |
-| Status: Needs Attention | Amber |
-| Status: Swarming      | Orange |
-| Status: Dormant       | Stone gray |
+Row-Level Security (RLS) policies are defined in `supabase/schema.sql` and
+enforced at the database level:
+
+- Gardens/hives/inspections are only readable by the owner or collaborators
+- Only the owner can modify garden metadata and manage collaborators
+- Inspections are immutable (no UPDATE policy); only the author can delete their own
+- Status enum and string length constraints enforced in the DB schema itself

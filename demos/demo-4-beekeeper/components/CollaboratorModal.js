@@ -2,16 +2,15 @@
 
 import { useState } from 'react'
 import Modal from './Modal'
-import { getUserByEmail } from '@/lib/db'
-import { addCollaborator, removeCollaborator } from '@/lib/db'
+import { getProfileByEmail, addCollaborator, removeCollaborator } from '@/lib/db'
 
-export default function CollaboratorModal({ garden, currentUser, onClose }) {
-  const [email, setEmail]     = useState('')
-  const [error, setError]     = useState('')
+export default function CollaboratorModal({ garden, currentUser, onClose, onRefresh }) {
+  const [email,   setEmail]   = useState('')
+  const [error,   setError]   = useState('')
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const collaborators = garden.collaborators || []
+  const collaborators = garden.garden_collaborators || []
 
   async function handleInvite(e) {
     e.preventDefault()
@@ -31,14 +30,19 @@ export default function CollaboratorModal({ garden, currentUser, onClose }) {
 
     setLoading(true)
     try {
-      const found = await getUserByEmail(trimmed)
-      if (!found) {
+      const profile = await getProfileByEmail(trimmed)
+      if (!profile) {
         setError('No user found with that email. They must sign up first.')
         return
       }
-      await addCollaborator(garden.id, { uid: found.uid, email: found.email, displayName: found.displayName })
-      setSuccess(`${found.displayName || found.email} added as collaborator.`)
+      await addCollaborator(garden.id, {
+        userId:      profile.id,
+        email:       profile.email,
+        displayName: profile.display_name || profile.email,
+      })
+      setSuccess(`${profile.display_name || profile.email} added as collaborator.`)
       setEmail('')
+      onRefresh?.()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -48,7 +52,8 @@ export default function CollaboratorModal({ garden, currentUser, onClose }) {
 
   async function handleRemove(collab) {
     try {
-      await removeCollaborator(garden.id, { uid: collab.uid })
+      await removeCollaborator(garden.id, collab.user_id)
+      onRefresh?.()
     } catch (err) {
       setError(err.message)
     }
@@ -56,7 +61,6 @@ export default function CollaboratorModal({ garden, currentUser, onClose }) {
 
   return (
     <Modal title="Manage Collaborators" onClose={onClose}>
-      {/* Current collaborators */}
       <div className="mb-4">
         <p className="text-xs uppercase tracking-wider text-charcoal-400 mb-2">Current Collaborators</p>
         {collaborators.length === 0 ? (
@@ -64,9 +68,9 @@ export default function CollaboratorModal({ garden, currentUser, onClose }) {
         ) : (
           <ul className="space-y-2">
             {collaborators.map(c => (
-              <li key={c.uid} className="flex items-center justify-between gap-3 bg-charcoal-700 rounded-lg px-3 py-2">
+              <li key={c.user_id} className="flex items-center justify-between gap-3 bg-charcoal-700 rounded-lg px-3 py-2">
                 <div>
-                  <p className="text-sm text-charcoal-100">{c.displayName}</p>
+                  <p className="text-sm text-charcoal-100">{c.display_name || c.email}</p>
                   <p className="text-xs text-charcoal-400">{c.email}</p>
                 </div>
                 <button
@@ -81,7 +85,6 @@ export default function CollaboratorModal({ garden, currentUser, onClose }) {
         )}
       </div>
 
-      {/* Invite form */}
       <form onSubmit={handleInvite} className="space-y-3">
         <p className="text-xs uppercase tracking-wider text-charcoal-400">Invite by Email</p>
         <input

@@ -1,118 +1,185 @@
-import {
-  collection,
-  doc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  getDoc,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  serverTimestamp,
-  Timestamp,
-  arrayUnion,
-} from 'firebase/firestore'
-import { db } from './firebase'
+import { getSupabase } from './supabase'
 
-// ── Users ─────────────────────────────────────────────────────────────────────
+// ── Profiles ──────────────────────────────────────────────────────────────────
 
-export async function getUserByEmail(email) {
-  const q = query(collection(db, 'users'), where('email', '==', email))
-  const snap = await getDocs(q)
-  if (snap.empty) return null
-  return { id: snap.docs[0].id, ...snap.docs[0].data() }
+export async function getProfileByEmail(email) {
+  const sb = getSupabase()
+  const { data } = await sb
+    .from('profiles')
+    .select('id, email, display_name')
+    .eq('email', email.toLowerCase().trim())
+    .maybeSingle()
+  return data
 }
 
 // ── Gardens ───────────────────────────────────────────────────────────────────
 
+export async function fetchGardens() {
+  const sb = getSupabase()
+  const { data, error } = await sb
+    .from('gardens')
+    .select('*, garden_collaborators(user_id, email, display_name)')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function fetchGarden(id) {
+  const sb = getSupabase()
+  const { data, error } = await sb
+    .from('gardens')
+    .select('*, garden_collaborators(user_id, email, display_name)')
+    .eq('id', id)
+    .single()
+  if (error) throw error
+  return data
+}
+
 export async function createGarden({ name, location, ownerId, ownerEmail }) {
-  if (!name || name.length > 80) throw new Error('Garden name must be 1–80 characters.')
-  return addDoc(collection(db, 'gardens'), {
-    name:          name.trim(),
-    location:      (location || '').trim().slice(0, 120),
-    ownerId,
-    ownerEmail,
-    collaborators: [],
-    createdAt:     serverTimestamp(),
-    updatedAt:     serverTimestamp(),
-  })
+  if (!name?.trim()) throw new Error('Name is required.')
+  if (name.length > 80) throw new Error('Name must be 80 characters or fewer.')
+  const sb = getSupabase()
+  const { data, error } = await sb
+    .from('gardens')
+    .insert({ name: name.trim(), location: (location || '').trim(), owner_id: ownerId, owner_email: ownerEmail })
+    .select()
+    .single()
+  if (error) throw error
+  return data
 }
 
-export async function updateGarden(gardenId, data) {
-  const allowed = ['name', 'location']
-  const safe = {}
-  for (const k of allowed) if (data[k] !== undefined) safe[k] = data[k]
-  safe.updatedAt = serverTimestamp()
-  return updateDoc(doc(db, 'gardens', gardenId), safe)
+export async function updateGarden(id, { name, location }) {
+  const sb = getSupabase()
+  const patch = {}
+  if (name !== undefined)     patch.name     = name.trim().slice(0, 80)
+  if (location !== undefined) patch.location = location.trim().slice(0, 120)
+  patch.updated_at = new Date().toISOString()
+  const { error } = await sb.from('gardens').update(patch).eq('id', id)
+  if (error) throw error
 }
 
-export async function deleteGarden(gardenId) {
-  return deleteDoc(doc(db, 'gardens', gardenId))
+export async function deleteGarden(id) {
+  const sb = getSupabase()
+  const { error } = await sb.from('gardens').delete().eq('id', id)
+  if (error) throw error
 }
 
-export async function addCollaborator(gardenId, { uid, email, displayName }) {
-  return updateDoc(doc(db, 'gardens', gardenId), {
-    collaborators: arrayUnion({ uid, email, displayName }),
-    updatedAt:     serverTimestamp(),
-  })
+// ── Collaborators ─────────────────────────────────────────────────────────────
+
+export async function addCollaborator(gardenId, { userId, email, displayName }) {
+  const sb = getSupabase()
+  const { error } = await sb
+    .from('garden_collaborators')
+    .insert({ garden_id: gardenId, user_id: userId, email, display_name: displayName || '' })
+  if (error) throw error
 }
 
-export async function removeCollaborator(gardenId, { uid }) {
-  const snap = await getDoc(doc(db, 'gardens', gardenId))
-  if (!snap.exists()) return
-  const collaborators = (snap.data().collaborators || []).filter(c => c.uid !== uid)
-  return updateDoc(doc(db, 'gardens', gardenId), { collaborators, updatedAt: serverTimestamp() })
+export async function removeCollaborator(gardenId, userId) {
+  const sb = getSupabase()
+  const { error } = await sb
+    .from('garden_collaborators')
+    .delete()
+    .eq('garden_id', gardenId)
+    .eq('user_id', userId)
+  if (error) throw error
 }
 
 // ── Hives ─────────────────────────────────────────────────────────────────────
 
 const VALID_STATUSES = ['healthy', 'needs_attention', 'swarming', 'dormant']
 
-export async function createHive({ name, gardenId, ownerId }) {
-  if (!name || name.length > 80) throw new Error('Hive name must be 1–80 characters.')
-  return addDoc(collection(db, 'hives'), {
-    name:      name.trim(),
-    gardenId,
-    ownerId,
-    status:    'healthy',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  })
+export async function fetchHives(gardenId) {
+  const sb = getSupabase()
+  const { data, error } = await sb
+    .from('hives')
+    .select('*')
+    .eq('garden_id', gardenId)
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return data || []
 }
 
-export async function updateHive(hiveId, data) {
-  const safe = {}
-  if (data.name)   safe.name   = data.name.trim().slice(0, 80)
+export async function fetchHive(id) {
+  const sb = getSupabase()
+  const { data, error } = await sb.from('hives').select('*').eq('id', id).single()
+  if (error) throw error
+  return data
+}
+
+export async function createHive({ name, gardenId, ownerId }) {
+  if (!name?.trim()) throw new Error('Name is required.')
+  if (name.length > 80) throw new Error('Name must be 80 characters or fewer.')
+  const sb = getSupabase()
+  const { data, error } = await sb
+    .from('hives')
+    .insert({ name: name.trim(), garden_id: gardenId, owner_id: ownerId, status: 'healthy' })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateHive(id, data) {
+  const patch = {}
+  if (data.name)   patch.name   = data.name.trim().slice(0, 80)
   if (data.status) {
     if (!VALID_STATUSES.includes(data.status)) throw new Error('Invalid status.')
-    safe.status = data.status
+    patch.status = data.status
   }
-  safe.updatedAt = serverTimestamp()
-  return updateDoc(doc(db, 'hives', hiveId), safe)
+  patch.updated_at = new Date().toISOString()
+  const sb = getSupabase()
+  const { error } = await sb.from('hives').update(patch).eq('id', id)
+  if (error) throw error
 }
 
-export async function deleteHive(hiveId) {
-  return deleteDoc(doc(db, 'hives', hiveId))
+export async function deleteHive(id) {
+  const sb = getSupabase()
+  const { error } = await sb.from('hives').delete().eq('id', id)
+  if (error) throw error
 }
 
 // ── Inspections ───────────────────────────────────────────────────────────────
 
-export async function addInspection({ hiveId, gardenId, authorId, authorName, message, timestamp }) {
-  if (!message || message.trim().length === 0) throw new Error('Message cannot be empty.')
-  if (message.length > 2000) throw new Error('Message too long (max 2000 chars).')
-  const ts = timestamp instanceof Date ? Timestamp.fromDate(timestamp) : serverTimestamp()
-  return addDoc(collection(db, 'inspections'), {
-    hiveId,
-    gardenId,
-    authorId,
-    authorName: authorName || 'Unknown',
-    message:    message.trim(),
-    timestamp:  ts,
-    createdAt:  serverTimestamp(),
-  })
+export async function fetchInspections(hiveId) {
+  const sb = getSupabase()
+  const { data, error } = await sb
+    .from('inspections')
+    .select('*')
+    .eq('hive_id', hiveId)
+    .order('timestamp', { ascending: false })
+  if (error) throw error
+  return data || []
 }
 
-export async function deleteInspection(inspectionId) {
-  return deleteDoc(doc(db, 'inspections', inspectionId))
+export async function fetchAllInspections(gardenIds) {
+  if (!gardenIds.length) return []
+  const sb = getSupabase()
+  const { data, error } = await sb
+    .from('inspections')
+    .select('*')
+    .in('garden_id', gardenIds)
+    .order('timestamp', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function addInspection({ hiveId, gardenId, authorId, authorName, message, timestamp }) {
+  if (!message?.trim()) throw new Error('Message cannot be empty.')
+  if (message.length > 2000) throw new Error('Message too long (max 2000 chars).')
+  const sb = getSupabase()
+  const { error } = await sb.from('inspections').insert({
+    hive_id:     hiveId,
+    garden_id:   gardenId,
+    author_id:   authorId,
+    author_name: authorName,
+    message:     message.trim(),
+    timestamp:   timestamp instanceof Date ? timestamp.toISOString() : new Date().toISOString(),
+  })
+  if (error) throw error
+}
+
+export async function deleteInspection(id) {
+  const sb = getSupabase()
+  const { error } = await sb.from('inspections').delete().eq('id', id)
+  if (error) throw error
 }

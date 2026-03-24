@@ -1,50 +1,54 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState } from 'react'
-import { onAuthStateChanged, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth'
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore'
-import { auth, db, googleProvider } from '@/lib/firebase'
+import { getSupabase } from '@/lib/supabase'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser]       = useState(null)
+  const [user,    setUser]    = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        // Upsert user profile in Firestore
-        const ref = doc(db, 'users', firebaseUser.uid)
-        const snap = await getDoc(ref)
-        if (!snap.exists()) {
-          await setDoc(ref, {
-            uid:         firebaseUser.uid,
-            email:       firebaseUser.email,
-            displayName: firebaseUser.displayName || firebaseUser.email,
-            photoURL:    firebaseUser.photoURL || null,
-            createdAt:   serverTimestamp(),
-          })
-        }
-        setUser({
-          uid:         firebaseUser.uid,
-          email:       firebaseUser.email,
-          displayName: firebaseUser.displayName || firebaseUser.email,
-          photoURL:    firebaseUser.photoURL || null,
-        })
-      } else {
-        setUser(null)
-      }
+    const sb = getSupabase()
+
+    sb.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
       setLoading(false)
     })
-    return unsubscribe
+
+    const { data: { subscription } } = sb.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
-  const signInWithGoogle = () => signInWithPopup(auth, googleProvider)
-  const signOut          = () => firebaseSignOut(auth)
+  const signUp = async ({ email, password, displayName }) => {
+    const sb = getSupabase()
+    const { error } = await sb.auth.signUp({
+      email,
+      password,
+      options: { data: { display_name: displayName || email.split('@')[0] } },
+    })
+    if (error) throw error
+  }
+
+  const signIn = async ({ email, password }) => {
+    const sb = getSupabase()
+    const { error } = await sb.auth.signInWithPassword({ email, password })
+    if (error) throw error
+  }
+
+  const signOut = async () => {
+    const sb = getSupabase()
+    await sb.auth.signOut()
+  }
+
+  const displayName = user?.user_metadata?.display_name || user?.email || ''
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={{ user, loading, displayName, signUp, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   )

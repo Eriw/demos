@@ -3,10 +3,9 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from './AuthProvider'
-import Image from 'next/image'
 
 export default function Navbar() {
-  const { user, signOut } = useAuth()
+  const { user, displayName, signOut } = useAuth()
   const pathname = usePathname()
 
   const links = [
@@ -14,11 +13,12 @@ export default function Navbar() {
     { href: '/activity',  label: 'Activity Feed' },
   ]
 
+  const initials = (displayName || '?')[0].toUpperCase()
+
   return (
     <header className="sticky top-0 z-40 bg-charcoal-800/95 backdrop-blur border-b border-charcoal-700 shadow-lg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          {/* Logo */}
           <Link href="/dashboard" className="flex items-center gap-2.5 group">
             <span className="text-2xl">🐝</span>
             <span className="text-honey-400 font-bold text-lg tracking-tight group-hover:text-honey-300 transition-colors">
@@ -26,7 +26,6 @@ export default function Navbar() {
             </span>
           </Link>
 
-          {/* Nav links */}
           <nav className="hidden sm:flex items-center gap-1">
             {links.map(({ href, label }) => {
               const active = pathname.startsWith(href)
@@ -46,23 +45,13 @@ export default function Navbar() {
             })}
           </nav>
 
-          {/* User menu */}
           {user && (
             <div className="flex items-center gap-3">
               <div className="hidden sm:flex items-center gap-2">
-                {user.photoURL ? (
-                  <img
-                    src={user.photoURL}
-                    alt={user.displayName}
-                    className="w-8 h-8 rounded-full ring-2 ring-honey-500/40"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-honey-600 flex items-center justify-center text-white text-sm font-bold">
-                    {(user.displayName || user.email || '?')[0].toUpperCase()}
-                  </div>
-                )}
-                <span className="text-charcoal-300 text-sm">{user.displayName || user.email}</span>
+                <div className="w-8 h-8 rounded-full bg-honey-600 flex items-center justify-center text-white text-sm font-bold">
+                  {initials}
+                </div>
+                <span className="text-charcoal-300 text-sm max-w-[140px] truncate">{displayName}</span>
               </div>
               <button
                 onClick={signOut}
